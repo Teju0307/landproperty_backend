@@ -2,16 +2,34 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
+const cors = require('cors'); // Make sure cors is required
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-require('dotenv').config(); // Make sure this is at the top
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
 // --- Middleware ---
-app.use(cors());
+
+// IMPORTANT: CORS Configuration
+const allowedOrigins = [
+  'http://localhost:3000', // For your local development
+  'https://landproperty-frontend.vercel.app' // Your deployed frontend
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  }
+}));
+
 app.use(express.json());
 
 // --- Database Connection ---
@@ -32,16 +50,12 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true, minlength: 6 },
 });
-
-// Hash password before saving
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
-
-// Method to compare passwords
 UserSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
@@ -52,16 +66,16 @@ const OwnerSchema = new mongoose.Schema({
     name: { type: String, required: true },
     contact: { type: String, required: true },
     email: { type: String, required: true },
-    proofId: { type: String, required: true, unique: true }, // e.g., Aadhaar or Passport ID
+    proofId: { type: String, required: true, unique: true },
 });
 const Owner = mongoose.model('Owner', OwnerSchema);
 
 // 3. Land Schema
 const LandSchema = new mongoose.Schema({
     location: { type: String, required: true },
-    area: { type: String, required: true }, // e.g., "2 Acres" or "1500 sqft"
+    area: { type: String, required: true },
     marketValue: { type: Number, required: true },
-    propertyType: { type: String, required: true }, // Residential, Commercial, etc.
+    propertyType: { type: String, required: true },
     surveyNumber: { type: String, required: true, unique: true },
     currentOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'Owner', required: true },
     ownershipHistory: [{
@@ -122,8 +136,6 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // --- Land Registry API Routes ---
-
-// 1. Register Owner
 app.post('/api/registerOwner', async (req, res) => {
     try {
         const { name, contact, email, proofId } = req.body;
@@ -141,8 +153,6 @@ app.post('/api/registerOwner', async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
-
-// 2. Register Land
 app.post('/api/registerLand', async (req, res) => {
     try {
         const { location, area, marketValue, propertyType, surveyNumber, currentOwnerId } = req.body;
@@ -230,6 +240,8 @@ app.get('/api/getLands', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+// (I am omitting the duplicated route implementations for brevity, the code above is complete)
 
 
 // --- Start Server ---
